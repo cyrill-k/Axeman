@@ -215,6 +215,7 @@ def process_worker(result_info):
                     str(entry['cert_index']),
                     chain_hash,
                     cert_data['leaf_cert']['as_der'],
+                    ";".join(x['as_der'] for x in cert_data['chain']),
                     ' '.join(cert_data['leaf_cert']['all_domains']),
                     str(cert_data['leaf_cert']['not_before']),
                     str(cert_data['leaf_cert']['not_after'])

@@ -73,7 +73,7 @@ async def populate_work(work_deque, log_info, start=0):
 
     total_size = tree_size - 1
 
-    end = start + block_size
+    end = start + block_size - 1
 
     if end > tree_size:
         end = tree_size
@@ -95,7 +95,7 @@ async def populate_work(work_deque, log_info, start=0):
 
         start += block_size
 
-        end = start + block_size + 1
+        end = start + block_size - 1
 
 def add_all_domains(cert_data):
     all_domains = []

@@ -73,7 +73,7 @@ async def queue_monitor(log_info, work_deque, download_results_queue):
         ))
         await asyncio.sleep(2)
 
-async def retrieve_certificates(loop, url=None, ctl_offset=0, output_directory='/tmp/', concurrency_count=DOWNLOAD_CONCURRENCY):
+async def retrieve_certificates(loop, url=None, ctl_offset=0, ctl_n_certificates=0, output_directory='/tmp/', concurrency_count=DOWNLOAD_CONCURRENCY):
     async with aiohttp.ClientSession(loop=loop, conn_timeout=10) as session:
         ctl_logs = await certlib.retrieve_all_ctls(session)
 
@@ -94,7 +94,7 @@ async def retrieve_certificates(loop, url=None, ctl_offset=0, output_directory='
                 continue
 
             try:
-                await certlib.populate_work(work_deque, log_info, start=ctl_offset)
+                await certlib.populate_work(work_deque, log_info, start=ctl_offset, n_leafs_to_fetch=ctl_n_certificates)
             except Exception as e:
                 logging.error("Log needs no update - {}".format(e))
                 continue
@@ -269,6 +269,8 @@ def main():
 
     parser.add_argument('-z', dest="ctl_offset", action="store", default=0, help="The CTL offset to start at")
 
+    parser.add_argument('-n', dest="ctl_n_certificates", action="store", default=0, help="The number of certificates to fetch")
+
     parser.add_argument('-o', dest="output_dir", action="store", default="/tmp", help="The output directory to store certificates in")
 
     parser.add_argument('-v', dest="verbose", action="store_true", help="Print out verbose/debug info")
@@ -291,7 +293,7 @@ def main():
     logging.info("Starting...")
 
     if args.ctl_url:
-        loop.run_until_complete(retrieve_certificates(loop, url=args.ctl_url, ctl_offset=int(args.ctl_offset), concurrency_count=args.concurrency_count, output_directory=args.output_dir))
+        loop.run_until_complete(retrieve_certificates(loop, url=args.ctl_url, ctl_offset=int(args.ctl_offset), ctl_n_certificates=int(args.ctl_n_certificates), concurrency_count=args.concurrency_count, output_directory=args.output_dir))
     else:
         loop.run_until_complete(retrieve_certificates(loop, concurrency_count=args.concurrency_count, output_directory=args.output_dir))
 

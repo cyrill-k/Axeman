@@ -67,18 +67,21 @@ async def retrieve_log_info(log, session):
         info.update(log)
         return info
 
-async def populate_work(work_deque, log_info, start=0):
+async def populate_work(work_deque, log_info, start=0, n_leafs_to_fetch=0):
     tree_size = log_info['tree_size']
     block_size = log_info['block_size']
 
-    total_size = tree_size - 1
+    total_size = tree_size - 1 if n_leafs_to_fetch == 0 else start + n_leafs_to_fetch - 1
 
     end = start + block_size - 1
 
-    if end > tree_size:
-        end = tree_size
+    if end >= tree_size:
+        end = tree_size - 1
 
-    chunks = math.ceil((total_size - start) / block_size)
+    if end > total_size:
+        end = total_size
+
+    chunks = math.ceil((total_size - start + 1) / block_size)
 
     if chunks == 0:
         raise Exception("No work needed!")

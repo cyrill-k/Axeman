@@ -169,7 +169,7 @@ def process_worker(result_info):
         return
     try:
         csv_storage = result_info['log_dir']
-        csv_file = "{}/{}-{}.csv".format(csv_storage, result_info['start'], result_info['end'])
+        csv_file = "{}/{}-{}.csv".format(csv_storage, result_info['start'], result_info['start']+len(result_info['entries'])-1)
 
         lines = []
 

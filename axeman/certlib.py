@@ -69,7 +69,9 @@ async def retrieve_log_info(log, session):
 
 async def populate_work(work_deque, log_info, start=0, n_leafs_to_fetch=0):
     tree_size = log_info['tree_size']
-    block_size = log_info['block_size']
+
+    # CT logs seem to return fewer items if the extact block size is requested compared
+    block_size = log_info['block_size'] - 1
 
     total_size = tree_size - 1 if n_leafs_to_fetch == 0 else start + n_leafs_to_fetch - 1
 

@@ -25,6 +25,8 @@ from OpenSSL import crypto
 
 from . import certlib
 
+print("AXEMAN VERSION 2.0.0")
+
 DOWNLOAD_CONCURRENCY = 50
 MAX_QUEUE_SIZE = 1000
 

@@ -73,15 +73,11 @@ async def populate_work(work_deque, log_info, start=0, n_leafs_to_fetch=0):
     # CT logs seem to return fewer items if the extact block size is requested compared
     block_size = log_info['block_size'] - 1
 
-    total_size = tree_size - 1 if n_leafs_to_fetch == 0 else start + n_leafs_to_fetch - 1
+    total_size = tree_size - 1 if n_leafs_to_fetch == 0 else min(start + n_leafs_to_fetch - 1, tree_size - 1)
 
-    end = start + block_size - 1
+    end = min(start + block_size - 1, total_size)
 
-    if end >= tree_size:
-        end = tree_size - 1
 
-    if end > total_size:
-        end = total_size
 
     chunks = math.ceil((total_size - start + 1) / block_size)
 
@@ -90,8 +86,7 @@ async def populate_work(work_deque, log_info, start=0, n_leafs_to_fetch=0):
 
     for _ in range(chunks):
         # Cap the end to the last record in the DB
-        if end >= tree_size:
-            end = tree_size - 1
+        end = min(end, total_size)
 
         assert end >= start, "End {} is less than start {}!".format(end, start)
         assert end < tree_size, "End {} is less than tree_size {}".format(end, tree_size)

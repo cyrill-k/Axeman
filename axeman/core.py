@@ -15,6 +15,7 @@ import aiohttp
 import aioprocessing
 import logging
 import locale
+import shutil
 
 try:
     locale.setlocale(locale.LC_ALL, 'en_US')
@@ -25,7 +26,7 @@ from OpenSSL import crypto
 
 from . import certlib
 
-print("AXEMAN VERSION 2.0.0")
+print("AXEMAN VERSION 2.1.0")
 
 DOWNLOAD_CONCURRENCY = 50
 MAX_QUEUE_SIZE = 1000
@@ -75,7 +76,7 @@ async def queue_monitor(log_info, work_deque, download_results_queue):
         ))
         await asyncio.sleep(2)
 
-async def retrieve_certificates(loop, url=None, ctl_offset=0, ctl_n_certificates=0, output_directory='/tmp/', concurrency_count=DOWNLOAD_CONCURRENCY):
+async def retrieve_certificates(loop, url=None, ctl_offset=0, ctl_n_certificates=0, output_directory='/tmp/', concurrency_count=DOWNLOAD_CONCURRENCY, temporary_file_storage_directory=None):
     async with aiohttp.ClientSession(loop=loop, conn_timeout=10) as session:
         ctl_logs = await certlib.retrieve_all_ctls(session)
 
@@ -106,7 +107,7 @@ async def retrieve_certificates(loop, url=None, ctl_offset=0, ctl_n_certificates
                 for _ in range(concurrency_count)
             ])
 
-            processing_task    = asyncio.ensure_future(processing_coro(download_results_queue, output_dir=output_directory))
+            processing_task    = asyncio.ensure_future(processing_coro(download_results_queue, output_dir=output_directory, temporary_file_storage_dir=temporary_file_storage_directory))
             queue_monitor_task = asyncio.ensure_future(queue_monitor(log_info, work_deque, download_results_queue))
 
             asyncio.ensure_future(download_tasks)
@@ -126,7 +127,7 @@ async def retrieve_certificates(loop, url=None, ctl_offset=0, ctl_n_certificates
 
             logging.info("Finished downloading and processing {}".format(log_info['url']))
 
-async def processing_coro(download_results_queue, output_dir="/tmp"):
+async def processing_coro(download_results_queue, output_dir="/tmp", temporary_file_storage_dir=None):
     logging.info("Starting processing coro and process pool")
     process_pool = aioprocessing.AioPool(initargs=(output_dir,))
 
@@ -152,6 +153,12 @@ async def processing_coro(download_results_queue, output_dir="/tmp"):
                 print("[{}] Making dir...".format(os.getpid()))
                 os.makedirs(csv_storage)
             entry['log_dir']=csv_storage
+            if temporary_file_storage_dir is not None:
+                tmp_csv_storage = '{}/certificates/{}'.format(temporary_file_storage_dir, entry['log_info']['url'].replace('/', '_'))
+                if not os.path.exists(tmp_csv_storage):
+                    print("[{}] Making tmp storage dir...".format(os.getpid()))
+                    os.makedirs(tmp_csv_storage)
+                entry['tmp_dir']=tmp_csv_storage
 
         if len(entries_iter) > 0:
             await process_pool.coro_map(process_worker, entries_iter)
@@ -170,9 +177,6 @@ def process_worker(result_info):
     if not result_info:
         return
     try:
-        csv_storage = result_info['log_dir']
-        csv_file = "{}/{}-{}.csv".format(csv_storage, result_info['start'], result_info['start']+len(result_info['entries'])-1)
-
         lines = []
 
         print("[{}] Parsing...".format(os.getpid()))
@@ -226,9 +230,18 @@ def process_worker(result_info):
 
         print("[{}] Finished, writing CSV...".format(os.getpid()))
 
-        with open(csv_file, 'w', encoding='utf8') as f:
-            f.write("".join(lines))
-        print("[{}] CSV {} written!".format(os.getpid(), csv_file))
+        csv_storage = result_info['log_dir']
+        csv_file_name = "{}-{}.csv".format(result_info['start'], result_info['start']+len(result_info['entries'])-1)
+        csv_file = os.path.join(csv_storage, csv_file_name)
+
+        if 'tmp_dir' in result_info:
+            csv_tmp_storage = result_info['tmp_dir']
+            write_csv_file_via_temporary_directory(csv_storage, csv_file_name, csv_tmp_storage, lines)
+            print("[{}] CSV {} written and moved from {}!".format(os.getpid(), csv_file, csv_tmp_storage))
+        else:
+            with open(csv_file, 'w', encoding='utf8') as f:
+                f.write("".join(lines))
+            print("[{}] CSV {} written!".format(os.getpid(), csv_file))
 
     except Exception as e:
         print("========= EXCEPTION =========")
@@ -237,6 +250,21 @@ def process_worker(result_info):
         print("=============================")
 
     return True
+
+
+def write_csv_file_via_temporary_directory(destination_directory, file_name, temporary_directory, lines):
+    temporary_path = os.path.join(temporary_directory, file_name)
+    final_path = os.path.join(destination_directory, file_name)
+
+    if not os.path.exists(temporary_directory):
+        print("[{}] Making temporary dir...".format(os.getpid()))
+        os.makedirs(temporary_directory)
+
+    with open(temporary_path, 'w', encoding='utf8') as f:
+        f.write("".join(lines))
+
+    shutil.move(temporary_path, final_path)
+
 
 async def get_certs_and_print():
     async with aiohttp.ClientSession(conn_timeout=5) as session:
@@ -279,6 +307,8 @@ def main():
 
     parser.add_argument('-c', dest='concurrency_count', action='store', default=50, type=int, help="The number of concurrent downloads to run at a time")
 
+    parser.add_argument('-t', dest='temporary_file_storage_directory', action='store', default=None, help="A temporary directory where the entries that are currently being written are stored (ideally on the same partition as the output directory to ensure that moving files is an atomic operation)")
+
     args = parser.parse_args()
 
     if args.list_mode:
@@ -295,9 +325,9 @@ def main():
     logging.info("Starting...")
 
     if args.ctl_url:
-        loop.run_until_complete(retrieve_certificates(loop, url=args.ctl_url, ctl_offset=int(args.ctl_offset), ctl_n_certificates=int(args.ctl_n_certificates), concurrency_count=args.concurrency_count, output_directory=args.output_dir))
+        loop.run_until_complete(retrieve_certificates(loop, url=args.ctl_url, ctl_offset=int(args.ctl_offset), ctl_n_certificates=int(args.ctl_n_certificates), concurrency_count=args.concurrency_count, output_directory=args.output_dir, temporary_file_storage_directory=args.temporary_file_storage_directory))
     else:
-        loop.run_until_complete(retrieve_certificates(loop, concurrency_count=args.concurrency_count, output_directory=args.output_dir))
+        loop.run_until_complete(retrieve_certificates(loop, concurrency_count=args.concurrency_count, output_directory=args.output_dir, temporary_file_storage_directory=args.temporary_file_storage_directory))
 
 if __name__ == "__main__":
     main()

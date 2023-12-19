@@ -26,7 +26,7 @@ from OpenSSL import crypto
 
 from . import certlib
 
-print("AXEMAN VERSION 2.1.0")
+print("AXEMAN VERSION 2.1.1")
 
 DOWNLOAD_CONCURRENCY = 50
 MAX_QUEUE_SIZE = 1000
@@ -288,7 +288,7 @@ def main():
     parser = argparse.ArgumentParser(description='Pull down certificate transparency list information')
 
     parser.add_argument('-f', dest='log_file', action='store', default='/tmp/axeman.log',
-                        help='location for the axeman log file')
+                        help='location for the axeman log file (use empty string for no log output)')
 
     parser.add_argument('-s', dest='start_offset', action='store', default=0,
                         help='Skip N number of lists before starting')
@@ -315,7 +315,11 @@ def main():
         loop.run_until_complete(get_certs_and_print())
         return
 
-    handlers = [logging.FileHandler(args.log_file), logging.StreamHandler()]
+    if args.log_file == "":
+        handlers = [logging.StreamHandler()]
+        print("output is not sent to any log file")
+    else:
+        handlers = [logging.FileHandler(args.log_file), logging.StreamHandler()]
 
     if args.verbose:
         logging.basicConfig(format='[%(levelname)s:%(name)s] %(asctime)s - %(message)s', level=logging.DEBUG, handlers=handlers)

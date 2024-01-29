@@ -26,7 +26,7 @@ from OpenSSL import crypto
 
 from . import certlib
 
-print("AXEMAN VERSION 2.1.1")
+print("AXEMAN VERSION 2.1.2")
 
 DOWNLOAD_CONCURRENCY = 50
 MAX_QUEUE_SIZE = 1000
@@ -266,11 +266,14 @@ def write_csv_file_via_temporary_directory(destination_directory, file_name, tem
     shutil.move(temporary_path, final_path)
 
 
-async def get_certs_and_print():
+async def get_certs_and_print(url):
     async with aiohttp.ClientSession(conn_timeout=5) as session:
         ctls = await certlib.retrieve_all_ctls(session)
         print("Found {} CTLs...".format(len(ctls)))
         for log in ctls:
+            if url is not None and log['url'] != url:
+                continue
+
             try:
                 log_info = await certlib.retrieve_log_info(log, session)
             except:
@@ -312,7 +315,7 @@ def main():
     args = parser.parse_args()
 
     if args.list_mode:
-        loop.run_until_complete(get_certs_and_print())
+        loop.run_until_complete(get_certs_and_print(url=args.ctl_url))
         return
 
     if args.log_file == "":
